@@ -1,12 +1,17 @@
 {
-  "name": "f16-bot",
+  "name": "family-discord-bot",
   "version": "1.0.0",
-  "description": "F16 Discord Bot",
+  "description": "بوت عائلة شامل للموسيقى والمجتمع والترفيه والإدارة",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "dependencies": {
-    "discord.js": "^14.21.0"
+    "discord.js": "^14.21.0",
+    "@discordjs/voice": "^0.19.0",
+    "play-dl": "^1.9.7"
   }
 }
