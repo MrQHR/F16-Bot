@@ -15,7 +15,8 @@ const {
   createAudioResource,
   AudioPlayerStatus,
   VoiceConnectionStatus,
-  entersState
+  entersState,
+  NoSubscriberBehavior
 } = require("@discordjs/voice");
 
 const play = require("play-dl");
@@ -26,7 +27,7 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
 if (!TOKEN || !CLIENT_ID) {
-  console.error("❌ TOKEN و CLIENT_ID مطلوبان");
+  console.error("❌ TOKEN أو CLIENT_ID غير موجود");
   process.exit(1);
 }
 
@@ -42,7 +43,7 @@ const client = new Client({
 });
 
 /* =========================
-   قاعدة البيانات
+   DATABASE
 ========================= */
 
 const dbFile = "./data.json";
@@ -51,7 +52,9 @@ let db = {};
 
 if (fs.existsSync(dbFile)) {
   try {
-    db = JSON.parse(fs.readFileSync(dbFile, "utf8"));
+    db = JSON.parse(
+      fs.readFileSync(dbFile, "utf8")
+    );
   } catch {
     db = {};
   }
@@ -65,6 +68,7 @@ function save() {
 }
 
 function getUser(guildId, userId) {
+
   db[guildId] ??= {};
 
   db[guildId][userId] ??= {
@@ -78,7 +82,7 @@ function getUser(guildId, userId) {
 }
 
 /* =========================
-   الأوامر
+   SLASH COMMANDS
 ========================= */
 
 const commands = [
@@ -89,7 +93,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("help")
-    .setDescription("عرض جميع أوامر البوت"),
+    .setDescription("قائمة أوامر البوت"),
 
   new SlashCommandBuilder()
     .setName("server")
@@ -98,18 +102,18 @@ const commands = [
   new SlashCommandBuilder()
     .setName("user")
     .setDescription("معلومات عضو")
-    .addUserOption(option =>
-      option
+    .addUserOption(o =>
+      o
         .setName("member")
         .setDescription("العضو")
         .setRequired(false)
     ),
 
-  /* الألعاب */
+  /* Games */
 
   new SlashCommandBuilder()
     .setName("coinflip")
-    .setDescription("رمي عملة"),
+    .setDescription("رمي العملة"),
 
   new SlashCommandBuilder()
     .setName("dice")
@@ -118,22 +122,22 @@ const commands = [
   new SlashCommandBuilder()
     .setName("8ball")
     .setDescription("الكرة السحرية")
-    .addStringOption(option =>
-      option
+    .addStringOption(o =>
+      o
         .setName("question")
-        .setDescription("سؤالك")
+        .setDescription("السؤال")
         .setRequired(true)
     ),
 
-  /* الاقتصاد */
+  /* Economy */
 
   new SlashCommandBuilder()
     .setName("balance")
     .setDescription("عرض الرصيد")
-    .addUserOption(option =>
-      option
+    .addUserOption(o =>
+      o
         .setName("member")
-        .setDescription("عضو")
+        .setDescription("العضو")
         .setRequired(false)
     ),
 
@@ -145,7 +149,7 @@ const commands = [
     .setName("leaderboard")
     .setDescription("المتصدرين"),
 
-  /* الإدارة */
+  /* Moderation */
 
   new SlashCommandBuilder()
     .setName("warn")
@@ -153,16 +157,16 @@ const commands = [
     .setDefaultMemberPermissions(
       PermissionsBitField.Flags.ModerateMembers
     )
-    .addUserOption(option =>
-      option
+    .addUserOption(o =>
+      o
         .setName("member")
         .setDescription("العضو")
         .setRequired(true)
     )
-    .addStringOption(option =>
-      option
+    .addStringOption(o =>
+      o
         .setName("reason")
-        .setDescription("سبب التحذير")
+        .setDescription("السبب")
         .setRequired(true)
     ),
 
@@ -172,8 +176,8 @@ const commands = [
     .setDefaultMemberPermissions(
       PermissionsBitField.Flags.ManageMessages
     )
-    .addIntegerOption(option =>
-      option
+    .addIntegerOption(o =>
+      o
         .setName("amount")
         .setDescription("عدد الرسائل")
         .setMinValue(1)
@@ -187,16 +191,11 @@ const commands = [
     .setDefaultMemberPermissions(
       PermissionsBitField.Flags.KickMembers
     )
-    .addUserOption(option =>
-      option
+    .addUserOption(o =>
+      o
         .setName("member")
         .setDescription("العضو")
         .setRequired(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName("reason")
-        .setDescription("السبب")
     ),
 
   new SlashCommandBuilder()
@@ -205,53 +204,22 @@ const commands = [
     .setDefaultMemberPermissions(
       PermissionsBitField.Flags.BanMembers
     )
-    .addUserOption(option =>
-      option
+    .addUserOption(o =>
+      o
         .setName("member")
         .setDescription("العضو")
         .setRequired(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName("reason")
-        .setDescription("السبب")
     ),
 
-  new SlashCommandBuilder()
-    .setName("timeout")
-    .setDescription("إسكات عضو")
-    .setDefaultMemberPermissions(
-      PermissionsBitField.Flags.ModerateMembers
-    )
-    .addUserOption(option =>
-      option
-        .setName("member")
-        .setDescription("العضو")
-        .setRequired(true)
-    )
-    .addIntegerOption(option =>
-      option
-        .setName("minutes")
-        .setDescription("المدة بالدقائق")
-        .setMinValue(1)
-        .setMaxValue(10080)
-        .setRequired(true)
-    )
-    .addStringOption(option =>
-      option
-        .setName("reason")
-        .setDescription("السبب")
-    ),
-
-  /* الموسيقى */
+  /* MUSIC */
 
   new SlashCommandBuilder()
     .setName("play")
     .setDescription("تشغيل أغنية")
-    .addStringOption(option =>
-      option
+    .addStringOption(o =>
+      o
         .setName("query")
-        .setDescription("اسم الأغنية أو الرابط")
+        .setDescription("اسم الأغنية أو رابط YouTube")
         .setRequired(true)
     ),
 
@@ -265,7 +233,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("queue")
-    .setDescription("قائمة الأغاني"),
+    .setDescription("عرض قائمة الانتظار"),
 
   new SlashCommandBuilder()
     .setName("nowplaying")
@@ -274,19 +242,19 @@ const commands = [
   new SlashCommandBuilder()
     .setName("volume")
     .setDescription("تغيير الصوت")
-    .addIntegerOption(option =>
-      option
+    .addIntegerOption(o =>
+      o
         .setName("level")
-        .setDescription("الصوت من 1 إلى 100")
+        .setDescription("من 1 إلى 100")
         .setMinValue(1)
         .setMaxValue(100)
         .setRequired(true)
     )
 
-].map(command => command.toJSON());
+].map(x => x.toJSON());
 
 /* =========================
-   تسجيل الأوامر
+   REGISTER COMMANDS
 ========================= */
 
 const rest = new REST({
@@ -307,23 +275,29 @@ async function registerCommands() {
       }
     );
 
-    console.log("✅ تم تسجيل أوامر Slash للسيرفر");
+    console.log(
+      "✅ تم تسجيل أوامر السيرفر"
+    );
 
   } else {
 
     await rest.put(
-      Routes.applicationCommands(CLIENT_ID),
+      Routes.applicationCommands(
+        CLIENT_ID
+      ),
       {
         body: commands
       }
     );
 
-    console.log("✅ تم تسجيل الأوامر عالميًا");
+    console.log(
+      "✅ تم تسجيل الأوامر عالميًا"
+    );
   }
 }
 
 /* =========================
-   نظام الموسيقى
+   MUSIC SYSTEM
 ========================= */
 
 const music = new Map();
@@ -332,19 +306,39 @@ function getMusic(guildId) {
 
   if (!music.has(guildId)) {
 
-    const player = createAudioPlayer();
+    const player =
+      createAudioPlayer({
+
+        behaviors: {
+          noSubscriber:
+            NoSubscriberBehavior.Play
+        }
+
+      });
 
     const state = {
+
       queue: [],
+
       current: null,
-      player,
+
       connection: null,
-      volume: 70
+
+      player,
+
+      volume: 80
+
     };
 
     player.on(
       AudioPlayerStatus.Idle,
-      () => playNext(guildId)
+      async () => {
+
+        await playNext(
+          guildId
+        );
+
+      }
     );
 
     player.on(
@@ -352,11 +346,15 @@ function getMusic(guildId) {
       error => {
 
         console.error(
-          "Music Error:",
+          "❌ Music Error:",
           error.message
         );
 
-        playNext(guildId);
+        state.current = null;
+
+        playNext(
+          guildId
+        );
       }
     );
 
@@ -369,11 +367,17 @@ function getMusic(guildId) {
   return music.get(guildId);
 }
 
-async function connectToVoice(member) {
+/* =========================
+   VOICE CONNECTION
+========================= */
 
-  const channel = member.voice.channel;
+async function connectVoice(member) {
+
+  const channel =
+    member.voice.channel;
 
   if (!channel) {
+
     throw new Error(
       "ادخل روم صوتي أولًا."
     );
@@ -382,25 +386,43 @@ async function connectToVoice(member) {
   const connection =
     joinVoiceChannel({
 
-      channelId: channel.id,
+      channelId:
+        channel.id,
 
-      guildId: channel.guild.id,
+      guildId:
+        channel.guild.id,
 
       adapterCreator:
-        channel.guild.voiceAdapterCreator,
+        channel.guild
+          .voiceAdapterCreator,
 
       selfDeaf: true
 
     });
 
+  connection.on(
+    "stateChange",
+    (oldState, newState) => {
+
+      console.log(
+        `🔊 Voice: ${oldState.status} → ${newState.status}`
+      );
+
+    }
+  );
+
   await entersState(
     connection,
     VoiceConnectionStatus.Ready,
-    20000
+    30000
   );
 
   return connection;
 }
+
+/* =========================
+   PLAY NEXT
+========================= */
 
 async function playNext(guildId) {
 
@@ -421,7 +443,12 @@ async function playNext(guildId) {
 
   try {
 
-    state.current = song;
+    console.log(
+      `🎵 تشغيل: ${song.title}`
+    );
+
+    state.current =
+      song;
 
     const stream =
       await play.stream(
@@ -435,8 +462,11 @@ async function playNext(guildId) {
       createAudioResource(
         stream.stream,
         {
-          inputType: stream.type,
-          inlineVolume: true
+          inputType:
+            stream.type,
+
+          inlineVolume:
+            true
         }
       );
 
@@ -447,7 +477,9 @@ async function playNext(guildId) {
       );
     }
 
-    state.player.play(resource);
+    state.player.play(
+      resource
+    );
 
     state.connection.subscribe(
       state.player
@@ -455,16 +487,24 @@ async function playNext(guildId) {
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "❌ فشل تشغيل الأغنية:",
+      error
+    );
 
     state.current = null;
 
-    playNext(guildId);
+    if (state.queue.length) {
+
+      await playNext(
+        guildId
+      );
+    }
   }
 }
 
 /* =========================
-   تشغيل البوت
+   READY
 ========================= */
 
 client.once(
@@ -472,7 +512,7 @@ client.once(
   async () => {
 
     console.log(
-      `✅ تم تشغيل F16-Bot: ${client.user.tag}`
+      `✅ البوت شغال: ${client.user.tag}`
     );
 
     try {
@@ -482,7 +522,7 @@ client.once(
     } catch (error) {
 
       console.error(
-        "❌ خطأ تسجيل الأوامر:",
+        "❌ فشل تسجيل الأوامر:",
         error
       );
     }
@@ -497,7 +537,7 @@ client.once(
 );
 
 /* =========================
-   الترحيب
+   WELCOME
 ========================= */
 
 client.on(
@@ -516,16 +556,18 @@ client.on(
 );
 
 /* =========================
-   XP
+   XP + !PING
 ========================= */
 
 client.on(
   "messageCreate",
-  async message => {
+  message => {
 
-    if (message.author.bot) return;
+    if (message.author.bot)
+      return;
 
-    if (!message.guild) return;
+    if (!message.guild)
+      return;
 
     const user =
       getUser(
@@ -537,11 +579,9 @@ client.on(
 
     save();
 
-    /* الأمر القديم */
-
     if (
-      message.content.toLowerCase()
-      === "!ping"
+      message.content
+        .toLowerCase() === "!ping"
     ) {
 
       message.reply(
@@ -552,7 +592,7 @@ client.on(
 );
 
 /* =========================
-   الأوامر
+   INTERACTIONS
 ========================= */
 
 client.on(
@@ -588,7 +628,7 @@ client.on(
             )
 
             .setDescription(
-              "كل شيء تحتاجه في سيرفرك ❤️"
+              "🎵 موسيقى • 🎮 ألعاب • 💰 اقتصاد • 🛡️ إدارة"
             )
 
             .addFields(
@@ -600,32 +640,28 @@ client.on(
               },
 
               {
+                name: "🎮 الترفيه",
+                value:
+                  "`/dice` `/coinflip` `/8ball`"
+              },
+
+              {
                 name: "💰 الاقتصاد",
                 value:
                   "`/balance` `/daily` `/leaderboard`"
               },
 
               {
-                name: "🎮 الترفيه",
-                value:
-                  "`/coinflip` `/dice` `/8ball`"
-              },
-
-              {
                 name: "🛡️ الإدارة",
                 value:
-                  "`/warn` `/clear` `/kick` `/ban` `/timeout`"
-              },
-
-              {
-                name: "ℹ️ المعلومات",
-                value:
-                  "`/server` `/user` `/ping`"
+                  "`/warn` `/clear` `/kick` `/ban`"
               }
 
             )
 
-            .setColor(0x5865F2);
+            .setColor(
+              0x5865F2
+            );
 
         return interaction.reply({
           embeds: [embed]
@@ -639,47 +675,11 @@ client.on(
         const guild =
           interaction.guild;
 
-        return interaction.reply({
-
-          embeds: [
-
-            new EmbedBuilder()
-
-              .setTitle(
-                `📊 ${guild.name}`
-              )
-
-              .addFields(
-
-                {
-                  name: "👥 الأعضاء",
-                  value:
-                    String(guild.memberCount),
-                  inline: true
-                },
-
-                {
-                  name: "🆔 ID",
-                  value: guild.id,
-                  inline: true
-                },
-
-                {
-                  name: "📅 الإنشاء",
-                  value:
-                    `<t:${Math.floor(
-                      guild.createdTimestamp / 1000
-                    )}:D>`,
-                  inline: true
-                }
-
-              )
-
-              .setColor(0x57F287)
-
-          ]
-
-        });
+        return interaction.reply(
+          `📊 **${guild.name}**\n` +
+          `👥 الأعضاء: **${guild.memberCount}**\n` +
+          `🆔 ID: \`${guild.id}\``
+        );
       }
 
       /* USER */
@@ -692,31 +692,13 @@ client.on(
           ) ||
           interaction.member;
 
-        return interaction.reply({
-
-          embeds: [
-
-            new EmbedBuilder()
-
-              .setTitle(
-                `👤 ${member.user.username}`
-              )
-
-              .setDescription(
-                `🆔 ${member.id}\n` +
-                `📅 دخل السيرفر: <t:${Math.floor(
-                  member.joinedTimestamp / 1000
-                )}:R>`
-              )
-
-              .setColor(0x5865F2)
-
-          ]
-
-        });
+        return interaction.reply(
+          `👤 **${member.user.username}**\n` +
+          `🆔 ${member.id}`
+        );
       }
 
-      /* COIN FLIP */
+      /* COIN */
 
       if (command === "coinflip") {
 
@@ -740,7 +722,7 @@ client.on(
           ) + 1;
 
         return interaction.reply(
-          `🎲 النتيجة: **${result}**`
+          `🎲 النرد: **${result}**`
         );
       }
 
@@ -752,24 +734,23 @@ client.on(
 
           "نعم ✅",
           "لا ❌",
-          "ممكن 🤔",
           "أكيد 🔥",
-          "لا أعتقد ❌",
-          "اسألني لاحقًا ⏳",
-          "أكيد نعم ❤️"
+          "ممكن 🤔",
+          "غالبًا نعم ❤️",
+          "غالبًا لا ❌",
+          "اسألني لاحقًا ⏳"
 
         ];
 
-        const answer =
-          answers[
-            Math.floor(
-              Math.random() *
-              answers.length
-            )
-          ];
-
         return interaction.reply(
-          `🎱 **${answer}**`
+          `🎱 ${
+            answers[
+              Math.floor(
+                Math.random() *
+                answers.length
+              )
+            ]
+          }`
         );
       }
 
@@ -790,7 +771,7 @@ client.on(
           );
 
         return interaction.reply(
-          `💰 رصيد **${member.username}**: **${user.coins}** 🪙`
+          `💰 **${member.username}** لديه **${user.coins}** 🪙`
         );
       }
 
@@ -808,32 +789,23 @@ client.on(
           Date.now();
 
         if (
-          now - user.lastDaily
-          < 86400000
+          now - user.lastDaily <
+          86400000
         ) {
 
-          const remaining =
-            86400000 -
-            (now - user.lastDaily);
-
-          const hours =
-            Math.ceil(
-              remaining /
-              3600000
-            );
-
           return interaction.reply(
-            `⏳ أخذت مكافأتك اليوم. ارجع بعد **${hours} ساعة**.`
+            "⏳ أخذت مكافأتك اليومية، ارجع بكرة."
           );
         }
 
-        const amount =
+        const reward =
           500 +
           Math.floor(
             Math.random() * 501
           );
 
-        user.coins += amount;
+        user.coins +=
+          reward;
 
         user.lastDaily =
           now;
@@ -841,7 +813,7 @@ client.on(
         save();
 
         return interaction.reply(
-          `🎁 استلمت مكافأتك اليومية: **${amount}** 🪙`
+          `🎁 حصلت على **${reward}** 🪙`
         );
       }
 
@@ -861,19 +833,17 @@ client.on(
           Object.entries(
             guildData
           )
-
             .sort(
               (a, b) =>
                 (b[1].coins || 0) -
                 (a[1].coins || 0)
             )
-
             .slice(0, 10);
 
         if (!users.length) {
 
           return interaction.reply(
-            "📭 لا توجد بيانات بعد."
+            "📭 لا توجد بيانات."
           );
         }
 
@@ -914,8 +884,8 @@ client.on(
 
         return interaction.reply(
           `⚠️ تم تحذير ${member}\n` +
-          `📝 السبب: **${reason}**\n` +
-          `⚠️ التحذيرات: **${user.warnings}**`
+          `📝 السبب: ${reason}\n` +
+          `📊 التحذيرات: ${user.warnings}`
         );
       }
 
@@ -939,75 +909,55 @@ client.on(
           );
 
         return interaction.editReply(
-          `🧹 تم حذف **${deleted.size}** رسالة.`
+          `🧹 تم حذف ${deleted.size} رسالة.`
         );
       }
 
-      /* KICK / BAN / TIMEOUT */
+      /* KICK */
 
-      if (
-        [
-          "kick",
-          "ban",
-          "timeout"
-        ].includes(command)
-      ) {
+      if (command === "kick") {
 
         const member =
           interaction.options.getMember(
             "member"
           );
 
-        const reason =
-          interaction.options.getString(
-            "reason"
-          ) ||
-          "بدون سبب";
-
-        if (!member) {
-
+        if (!member)
           return interaction.reply(
-            "❌ لم أجد العضو."
+            "❌ العضو غير موجود."
           );
-        }
 
-        if (command === "kick") {
-
-          await member.kick(
-            reason
-          );
-        }
-
-        if (command === "ban") {
-
-          await member.ban({
-            reason
-          });
-        }
-
-        if (
-          command ===
-          "timeout"
-        ) {
-
-          const minutes =
-            interaction.options.getInteger(
-              "minutes"
-            );
-
-          await member.timeout(
-            minutes * 60000,
-            reason
-          );
-        }
+        await member.kick();
 
         return interaction.reply(
-          `✅ تم تنفيذ **${command}** على ${member}\n` +
-          `📝 السبب: ${reason}`
+          `👢 تم طرد ${member}.`
         );
       }
 
-      /* PLAY */
+      /* BAN */
+
+      if (command === "ban") {
+
+        const member =
+          interaction.options.getMember(
+            "member"
+          );
+
+        if (!member)
+          return interaction.reply(
+            "❌ العضو غير موجود."
+          );
+
+        await member.ban();
+
+        return interaction.reply(
+          `🔨 تم حظر ${member}.`
+        );
+      }
+
+      /* =====================
+         PLAY
+      ===================== */
 
       if (command === "play") {
 
@@ -1017,7 +967,7 @@ client.on(
         if (!member.voice.channel) {
 
           return interaction.reply(
-            "🎧 ادخل روم صوتي أولًا."
+            "🎧 لازم تدخل روم صوتي أولًا."
           );
         }
 
@@ -1033,73 +983,104 @@ client.on(
             interaction.guild.id
           );
 
-        if (!state.connection) {
+        try {
 
-          state.connection =
-            await connectToVoice(
-              member
-            );
+          if (!state.connection) {
+
+            state.connection =
+              await connectVoice(
+                member
+              );
+          }
+
+        } catch (error) {
+
+          console.error(
+            "❌ Voice Error:",
+            error
+          );
+
+          return interaction.editReply(
+            "❌ ما قدرت أدخل الروم الصوتي. تأكد أن البوت عنده Connect و Speak."
+          );
         }
 
         let song;
 
-        if (
-          play.yt_validate(
-            query
-          ) === "video"
-        ) {
+        try {
 
-          const info =
-            await play.video_basic_info(
+          if (
+            play.yt_validate(
               query
-            );
+            ) === "video"
+          ) {
 
-          song = {
+            const info =
+              await play.video_basic_info(
+                query
+              );
 
-            title:
-              info.video_details.title,
+            song = {
 
-            url:
-              info.video_details.url
+              title:
+                info.video_details.title,
 
-          };
+              url:
+                info.video_details.url
 
-        } else {
+            };
 
-          const results =
-            await play.search(
-              query,
-              {
-                limit: 1,
-                source: {
-                  youtube: "video"
+          } else {
+
+            const results =
+              await play.search(
+                query,
+                {
+                  limit: 1,
+                  source: {
+                    youtube: "video"
+                  }
                 }
-              }
-            );
+              );
 
-          if (!results.length) {
+            if (!results.length) {
 
-            return interaction.editReply(
-              "❌ ما لقيت الأغنية."
-            );
+              return interaction.editReply(
+                "❌ ما لقيت الأغنية."
+              );
+            }
+
+            song = {
+
+              title:
+                results[0].title,
+
+              url:
+                results[0].url
+
+            };
           }
 
-          song = {
+        } catch (error) {
 
-            title:
-              results[0].title,
+          console.error(
+            "❌ YouTube Error:",
+            error
+          );
 
-            url:
-              results[0].url
-
-          };
+          return interaction.editReply(
+            "❌ حصلت مشكلة في جلب الأغنية من YouTube."
+          );
         }
 
         state.queue.push(
           song
         );
 
-        if (!state.current) {
+        const wasPlaying =
+          state.current !== null;
+
+        if (!wasPlaying) {
 
           await playNext(
             interaction.guild.id
@@ -1107,7 +1088,8 @@ client.on(
         }
 
         return interaction.editReply(
-          `🎵 تمت إضافة: **${song.title}**`
+          `🎵 **تمت إضافة الأغنية**\n\n` +
+          `🎶 ${song.title}`
         );
       }
 
@@ -1133,7 +1115,7 @@ client.on(
         state.player.stop();
 
         return interaction.reply(
-          "⏭️ تم التخطي."
+          "⏭️ تم تخطي الأغنية."
         );
       }
 
@@ -1163,7 +1145,8 @@ client.on(
 
           state.connection.destroy();
 
-          state.connection = null;
+          state.connection =
+            null;
         }
 
         return interaction.reply(
@@ -1189,7 +1172,7 @@ client.on(
         ) {
 
           return interaction.reply(
-            "📭 القائمة فارغة."
+            "📭 قائمة التشغيل فارغة."
           );
         }
 
@@ -1214,7 +1197,7 @@ client.on(
           );
 
         return interaction.reply(
-          `📜 **قائمة التشغيل**\n${list.join("\n")}`
+          `📜 **قائمة التشغيل**\n\n${list.join("\n")}`
         );
       }
 
@@ -1236,12 +1219,12 @@ client.on(
         ) {
 
           return interaction.reply(
-            "📭 ما فيه أغنية شغالة."
+            "📭 لا توجد أغنية الآن."
           );
         }
 
         return interaction.reply(
-          `🎵 الآن: **${state.current.title}**`
+          `🎵 الآن يتم تشغيل:\n**${state.current.title}**`
         );
       }
 
@@ -1266,19 +1249,16 @@ client.on(
           level;
 
         return interaction.reply(
-          `🔊 تم ضبط الصوت على **${level}%**.`
+          `🔊 مستوى الصوت: **${level}%**`
         );
       }
 
     } catch (error) {
 
       console.error(
-        "Command Error:",
+        "❌ Command Error:",
         error
       );
-
-      const message =
-        "❌ حدث خطأ أثناء تنفيذ الأمر.";
 
       if (
         interaction.deferred ||
@@ -1286,14 +1266,17 @@ client.on(
       ) {
 
         await interaction
-          .editReply(message)
+          .editReply(
+            "❌ حدث خطأ أثناء تنفيذ الأمر."
+          )
           .catch(() => {});
 
       } else {
 
         await interaction
           .reply({
-            content: message,
+            content:
+              "❌ حدث خطأ أثناء تنفيذ الأمر.",
             ephemeral: true
           })
           .catch(() => {});
@@ -1303,7 +1286,7 @@ client.on(
 );
 
 /* =========================
-   تسجيل الدخول
+   LOGIN
 ========================= */
 
 client.login(TOKEN);
